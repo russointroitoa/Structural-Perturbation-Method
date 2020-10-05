@@ -14,7 +14,7 @@ class SPM(object):
     def __init__(self, A, p):
         """
         :param A: original adjacency matrix that would be decomposed in A = A_r + delta_A
-        :param p: fraction of links to constitute a perturbation set delta_E
+        :param p: fraction of links to generate a perturbation set delta_E
         :return:
         """
 
