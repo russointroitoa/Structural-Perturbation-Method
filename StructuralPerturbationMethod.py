@@ -79,7 +79,7 @@ class SPM(object):
         for k in range(A_r.shape[0]):
             perturbed_A += (lambda_k[k] + delta_lambda_k[k]) * np.dot(x_k[:, k][:, None], x_k[:, k][None, :])
 
-        # Clear perturbed_A: check the existing link in A_r [i.e. in E_r] and set those positions = -np.inf in
+        # perturbed_A Cleaning: check the existing link in A_r [i.e. in E_r] and set those positions = -np.inf in
         # perturbed_A such that these links don't occur in the ranking to extract the most probable missing link.
         # What we are doing is to consider the set U - E_r, where U is the universe of possible links given N nodes
         perturbed_A[np.where(A_r == 1)] = -np.inf
