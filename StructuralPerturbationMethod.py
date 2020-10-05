@@ -97,7 +97,7 @@ class SPM(object):
 
         up_matrix_ranking = np.triu(perturbed_A).ravel().argsort()[::-1]
         ranking = up_matrix_ranking[:len(up_matrix_ranking) // 2]
-        ranking = [(int(x / N), x % N) for x in ranking][:at]
+        ranking = [(int(x / self.N), x % self.N) for x in ranking][:at]
         return ranking
 
     def evaluate(self, predicted_links):
