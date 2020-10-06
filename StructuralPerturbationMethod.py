@@ -63,27 +63,87 @@ class SPM(object):
 
         return res
 
+
     def check_degenerate_eig(self, lambda_k, x_k):
-        """Degenerate eigenvalues means that some eigenvectors correspond to the same eigenvalue, or, on the other hand,
-         some eigenvalues have the same value. In order to consider a perturbation, we need to transform these degenerate
-         eigenvalues in a non-degenerate eigenvalues"""
+        """Procedure to check and correct degenerate eigenvalue
+        Degenerate eigenvalues means that M eigenvectors correspond to the same eigenvalue, or, on the other hand,
+        some eigenvalues have the same value. In order to consider a perturbation, we need to transform these degenerate
+        eigenvalues in a non-degenerate eigenvalues"""
 
-        # Check if some eigenvalues is duplicated
-        if len(set(lambda_k)) == lambda_k:
-            return lambda_k, x_k
+        print("Degenerate-Eigenvalues. Correction..")
 
-        # TODO
+        from collections import defaultdict, OrderedDict
 
+        eigen_dict = defaultdict(list)
+        tmp_list = list(zip(lambda_k, range(len(lambda_k))))
 
+        # Create a dict with lambda_k --> [List of indices of eigenvector associated to the same eigenvalue lambda_k]
+        for key, value in tmp_list:
+            eigen_dict[key].append(value)
+
+        # Final Dict to restore the order of the lambda_k:
+        # key= index of the eigenvector  --> value: (lambda_k, delta_lambda_k, x_k) or (lambda_k, d_sign_lambda_k, x_sign_k)
+
+        final_delta_lambda_k = OrderedDict()
+        final_x_k = OrderedDict()
+
+        # Correction Procedure
+        for key, value in eigen_dict:
+            if len(value) > 1:
+                m = np.array([x_k[:, i] for i in value]).T
+
+                # Transform eigenvectors (they are all linearly independent) associated to the same eigenvalue in a basis
+                # via Gram-Schmidt algorithm
+                q,r = np.linalg.qr(m)
+
+                # Create W : see "Support Information 'Case of degenerate eigenvalues'
+                # https://www.researchgate.net/publication/272372246_Toward_link_predictability_of_complex_networks "
+
+                W = q.T.dot(self.delta_A).dot(q)    # --> W is an MxM matrix
+
+                # Following the paper, we want to find eigenvalues (delta_lambda_k)/eigenvectors(B_k)
+                # for W*B_k = delta_lambda_k * B_k .
+                # Delta_sign_lambda_k represents the corrected non-degenerate eigenvalue
+                # x_sign_k represent the unique eigenvector associated to the corrected eigenvalue
+
+                d_sign_lambda_k, B_k = np.linalg.eig(W)
+                x_sign_k = q.dot(B_k.T)   # q: NxM   B_k: MxM
+
+                for i in range(len(value)):
+                    #res_dict[value[i]] = (d_sign_lambda_k[i], x_sign_k[:, i])
+
+                    final_delta_lambda_k[value[i]] = d_sign_lambda_k[i]
+                    final_x_k[value[i]] = x_sign_k[:, i]
+
+            elif len(value) == 1:
+                # compute delta_lambda_k for normal eigenvalues
+                num = x_k[:, value[0]].T.dot(self.delta_A).dot(x_k[:, value[0]])
+                den = x_k[:, value[0]].T.dot(x_k[:, value[0]])
+                #res_dict[value[0]] = (num / den,  x_k[:, value[0]])
+
+                final_delta_lambda_k[value[0]] = num / den
+                final_x_k[value[0]] = x_k[:, value[0]]
+
+            else:
+                raise Exception(f"Error: eigenvalue {key} has no index in its list {value}")
+
+        # Return delta_lambda_k and x_k as matrix
+        res_delta_lambda_k = np.array(list(final_delta_lambda_k.values()))
+        res_x_k = np.array(list(final_x_k)).T
+
+        return res_delta_lambda_k, res_x_k
 
     def compute_perturbed_matrix(self, A_r, delta_A):
 
         lambda_k, x_k = np.linalg.eig(A_r)
 
-        # TODO Check degenerate eigenvalues and apply conversion to non-degenerate eigenvalues
-        # lambda_k, x_k = self.check_degenerate_eig(lambda_k, x_k)
+        #  TODO Check if some eigenvalues is duplicated ---> Controllare l'ordine di lambda_k e dei delta_lambda_k
+        if len(set(lambda_k)) != len(lambda_k):
+            delta_lambda_k, x_k = self.check_degenerate_eig(lambda_k, x_k)
 
-        delta_lambda_k = self.compute_delta_lambda(x_k, delta_A)
+        else:
+            delta_lambda_k = self.compute_delta_lambda(x_k, delta_A)
+
 
         perturbed_A = np.zeros(A_r.shape)
 
