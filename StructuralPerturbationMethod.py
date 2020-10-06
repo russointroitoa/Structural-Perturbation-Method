@@ -47,7 +47,7 @@ class SPM(object):
         for e in edges:
             matrix[e[0], e[1]] = 1
             matrix[e[1], e[0]] = 1
-        return A
+        return matrix
 
     def compute_delta_lambda(self, v, delta_A):
         """
@@ -63,13 +63,25 @@ class SPM(object):
 
         return res
 
+    def check_degenerate_eig(self, lambda_k, x_k):
+        """Degenerate eigenvalues means that some eigenvectors correspond to the same eigenvalue, or, on the other hand,
+         some eigenvalues have the same value. In order to consider a perturbation, we need to transform these degenerate
+         eigenvalues in a non-degenerate eigenvalues"""
+
+        # Check if some eigenvalues is duplicated
+        if len(set(lambda_k)) == lambda_k:
+            return lambda_k, x_k
+
+        # TODO
+
+
+
     def compute_perturbed_matrix(self, A_r, delta_A):
 
         lambda_k, x_k = np.linalg.eig(A_r)
-        """
-        w: eigenvalues of A_r
-        v: right-eigenvectors of A_r
-        """
+
+        # TODO Check degenerate eigenvalues and apply conversion to non-degenerate eigenvalues
+        # lambda_k, x_k = self.check_degenerate_eig(lambda_k, x_k)
 
         delta_lambda_k = self.compute_delta_lambda(x_k, delta_A)
 
