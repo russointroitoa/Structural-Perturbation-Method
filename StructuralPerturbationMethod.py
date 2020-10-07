@@ -1,7 +1,8 @@
 import numpy as np
 import math
+from tqdm import tqdm
 
-np.random.seed(42)
+np.random.seed(42)   #TODO: multiple run with different missing links
 
 class SPM(object):
 
@@ -11,30 +12,43 @@ class SPM(object):
     constitute the set E_r . Denote by A and ΔA the corresponding adjacency matrices; obviously, A = AR + ΔA.
     """
 
-    def __init__(self, A, p):
+    def __init__(self, A, p=None, delta_A=None, n_remove_link=None):
         """
         :param A: original adjacency matrix that would be decomposed in A = A_r + delta_A
         :param p: fraction of links to generate a perturbation set delta_E
+        :param delta_A: particular perturbation. If None, a random perturbation is computed
         :return:
         """
+
+        assert (p is not None and delta_A is None and n_remove_link is None) or \
+               (p is None and delta_A is not None and n_remove_link is not None) , "Wrong input choice!"
 
         self.A = A
         self.p = p
         self.N = self.A.shape[0]
-        self.n_removed_link = math.ceil(self.N * self.p)
 
-        # Extract a fraction p of links from A to generate delta_A
-        links = np.where(np.triu(self.A) == 1)    # Tuple (x, y) with x and y are lists of indices, we consider only
-                                                    # the upper triangle of the matrix and reflect the symmetry of the
-                                                    # matrix in self.create_adj_matrix()
-        indices = np.random.randint(0, links[0].shape[0], self.n_removed_link)
-        self.links = list(zip(links[0][indices], links[1][indices]))
+        if delta_A is not None:
+            self.n_removed_link = n_remove_link
+            self.delta_A = delta_A
+            self.A_r = self.A - self.delta_A
+            self.links = np.where(np.triu(self.delta_A) == 1)
+            self.links = list(zip(self.links[0], self.links[1]))
 
-        # Create delta_A
-        self.delta_A = self.create_adj_matrix(self.N, self.links)
+        else:
+            self.n_removed_link = math.ceil(self.N * self.p)
 
-        # Create A_r = A - delta_A
-        self.A_r = self.A - self.delta_A
+            # Extract a fraction p of links from A to generate delta_A
+            links = np.where(np.triu(self.A) == 1)    # Tuple (x, y) with x and y are lists of indices, we consider only
+                                                        # the upper triangle of the matrix and reflect the symmetry of the
+                                                        # matrix in self.create_adj_matrix()
+            indices = np.random.randint(0, links[0].shape[0], self.n_removed_link)
+            self.links = list(zip(links[0][indices], links[1][indices]))
+
+            # Create delta_A
+            self.delta_A = self.create_adj_matrix(self.N, self.links)
+
+            # Create A_r = A - delta_A
+            self.A_r = self.A - self.delta_A
 
 
     def create_adj_matrix(self, N, edges):
@@ -56,7 +70,7 @@ class SPM(object):
         """
         res = np.empty(v.shape[0])
 
-        for k in range(v.shape[0]):
+        for k in tqdm(range(v.shape[0])):
             num = v[:, k].T.dot(delta_A).dot(v[:, k])
             den = v[:, k].T.dot(v[:, k])
             res[k] = num / den
@@ -70,7 +84,6 @@ class SPM(object):
         some eigenvalues have the same value. In order to consider a perturbation, we need to transform these degenerate
         eigenvalues in a non-degenerate eigenvalues"""
 
-        print("Degenerate-Eigenvalues. Correction..")
 
         from collections import defaultdict, OrderedDict
 
@@ -90,6 +103,7 @@ class SPM(object):
         # Correction Procedure
         for key, value in eigen_dict:
             if len(value) > 1:
+                print(f"Correction for eigenvalue {key}")
                 m = np.array([x_k[:, i] for i in value]).T
 
                 # Transform eigenvectors (they are all linearly independent) associated to the same eigenvalue in a basis
@@ -109,7 +123,8 @@ class SPM(object):
                 d_sign_lambda_k, B_k = np.linalg.eig(W)
                 x_sign_k = q.dot(B_k.T)   # q: NxM   B_k: MxM
 
-                for i in range(len(value)):
+
+                for i in tqdm(range(len(value))):
                     #res_dict[value[i]] = (d_sign_lambda_k[i], x_sign_k[:, i])
 
                     final_delta_lambda_k[value[i]] = d_sign_lambda_k[i]
@@ -137,19 +152,23 @@ class SPM(object):
 
         lambda_k, x_k = np.linalg.eig(A_r)
 
-        #  TODO Check if some eigenvalues is duplicated ---> Controllare l'ordine di lambda_k e dei delta_lambda_k
         if len(set(lambda_k)) != len(lambda_k):
-            delta_lambda_k, x_k = self.check_degenerate_eig(lambda_k, x_k)
+
+            print("Degenerate-Eigenvalues! --> Correction..")
+            delta_lambda_k, x_k = self.check_degenerate_eig(lambda_k, x_k)   #TODO controllare che tutto funzioni
 
         else:
-            delta_lambda_k = self.compute_delta_lambda(x_k, delta_A)
 
+            print("Non-degenerate Eigenvalues. Compute delta_lambda_k")
+            delta_lambda_k = self.compute_delta_lambda(x_k, delta_A)
 
         perturbed_A = np.zeros(A_r.shape)
 
         # perturbed_A = perturbed_A + ((lambda_k + delta_lambda_k)*(x_k.dot(x_k.T)))
         for k in range(A_r.shape[0]):
-            perturbed_A += (lambda_k[k] + delta_lambda_k[k]) * np.dot(x_k[:, k][:, None], x_k[:, k][None, :])
+            #perturbed_A += (lambda_k[k] + delta_lambda_k[k]) * np.dot(x_k[:, k][:, None], x_k[:, k][None, :])
+            perturbed_A += (lambda_k[k] + delta_lambda_k[k]) * np.dot(x_k[:, k][:, None], x_k[:, k][None, :])           # TODO prodotto tra matrici?
+
 
         # perturbed_A Cleaning: check the existing link in A_r [i.e. in E_r] and set those positions = -np.inf in
         # perturbed_A such that these links don't occur in the ranking to extract the most probable missing link.
@@ -167,6 +186,7 @@ class SPM(object):
         # Since the matrix is symmetric, we can consider the upper triangle and consider the first half of results
         # (the second half represents the element of the low triangle of the matrix, set to zero)
 
+        print("Get ranking..")
         up_matrix_ranking = np.triu(perturbed_A).ravel().argsort()[::-1]
         ranking = up_matrix_ranking[:len(up_matrix_ranking) // 2]
         ranking = [(int(x / self.N), x % self.N) for x in ranking][:at]
