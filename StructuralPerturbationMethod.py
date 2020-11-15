@@ -1,8 +1,9 @@
 import numpy as np
 import math
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
-np.random.seed(42)   #TODO: multiple run with different missing links
+
+# TODO Farlo tutto con scipy.sparse
 
 class SPM(object):
 
@@ -10,6 +11,16 @@ class SPM(object):
     Given a graph G = (V, E), we can construct the adjacency matrix A of the E links.
     We randomly select a fraction p of the links to constitute a perturbation set ΔE, while the rest of the links E − ΔE
     constitute the set E_r . Denote by A and ΔA the corresponding adjacency matrices; obviously, A = AR + ΔA.
+
+    RecSys:
+        - URM: user-item matrix
+        - Dalla URM si crea una matrice quadrata item-item o user-user che corrisponde alla matrice
+            di partenza del SPM
+        - Si usa SPM e si ottiene una matrice quadrata A_signed item-item o user-user che corrisponde ad una similarità [come cosine]
+        - Per tirare fuori gli scores si fa:
+            1. Se la matrice quadrata iniziale era item-item: recommendations = URM * A_signed
+            2. Se la matrice quadrata iniziale era user-user: recommendations = A_signed * URM
+
     """
 
     def __init__(self, A, p=None, delta_A=None, n_remove_link=None):
@@ -26,15 +37,20 @@ class SPM(object):
         self.A = A
         self.p = p
         self.N = self.A.shape[0]
+        self.delta_A = delta_A
+        self.n_removed_link = n_remove_link
 
-        if delta_A is not None:
-            self.n_removed_link = n_remove_link
-            self.delta_A = delta_A
+    def split_init(self, isSingle=True):
+        if self.delta_A is not None:
+            # self.n_removed_link = n_remove_link
+            # self.delta_A = delta_A
             self.A_r = self.A - self.delta_A
             self.links = np.where(np.triu(self.delta_A) == 1)
             self.links = list(zip(self.links[0], self.links[1]))
-
         else:
+            if isSingle:
+                np.random.seed(42)
+
             self.n_removed_link = math.ceil(self.N * self.p)
 
             # Extract a fraction p of links from A to generate delta_A
@@ -70,7 +86,7 @@ class SPM(object):
         """
         res = np.empty(v.shape[0])
 
-        for k in tqdm(range(v.shape[0])):
+        for k in range(v.shape[0]):
             num = v[:, k].T.dot(delta_A).dot(v[:, k])
             den = v[:, k].T.dot(v[:, k])
             res[k] = num / den
@@ -124,7 +140,7 @@ class SPM(object):
                 x_sign_k = q.dot(B_k.T)   # q: NxM   B_k: MxM
 
 
-                for i in tqdm(range(len(value))):
+                for i in range(len(value)):
                     #res_dict[value[i]] = (d_sign_lambda_k[i], x_sign_k[:, i])
 
                     final_delta_lambda_k[value[i]] = d_sign_lambda_k[i]
@@ -158,7 +174,6 @@ class SPM(object):
             delta_lambda_k, x_k = self.check_degenerate_eig(lambda_k, x_k)   #TODO controllare che tutto funzioni
 
         else:
-
             print("Non-degenerate Eigenvalues. Compute delta_lambda_k")
             delta_lambda_k = self.compute_delta_lambda(x_k, delta_A)
 
@@ -202,6 +217,8 @@ class SPM(object):
         return correct_predicted / n_missing_links
 
     def run(self, verbose=True):
+        self.split_init(isSingle=True)
+
         self.perturbed_A = self.compute_perturbed_matrix(self.A_r, self.delta_A)
         ranks = self.extract_ranking(self.perturbed_A, self.n_removed_link)
 
@@ -209,3 +226,24 @@ class SPM(object):
             print(f'Missing Links: {self.links}')
             print(f'Predicted Links {ranks}')
         print(f"Structural Consistency: {self.evaluate(ranks)}")
+
+        return self.links, ranks
+
+    def k_runs(self, k, verbose=True):
+        assert (k != 1), "k must be != 1, call run otherwise"
+
+        res = np.zeros((self.N, self.N))
+        for i in trange(k, desc='Iteration'):
+            self.split_init(isSingle=False)
+
+            res += self.compute_perturbed_matrix(self.A_r, self.delta_A)
+
+        res /= k
+
+        ranks = self.extract_ranking(res, self.n_removed_link)
+
+        if verbose:
+            print(f'Missing Links: {self.links}')
+            print(f'Predicted Links {ranks}')
+        print(f"Structural Consistency: {self.evaluate(ranks)}")
+        return self.links, ranks
