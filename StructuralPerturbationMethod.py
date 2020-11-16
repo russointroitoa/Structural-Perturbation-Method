@@ -237,7 +237,7 @@ class SPM(object):
             self.split_init(isSingle=False)
 
             res += self.compute_perturbed_matrix(self.A_r, self.delta_A)
-
+            self.delta_A = None
         res /= k
 
         ranks = self.extract_ranking(res, self.n_removed_link)
