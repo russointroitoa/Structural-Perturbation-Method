@@ -8,7 +8,8 @@ from tqdm import tqdm
 import sys
 sys.path.append("/Users/alessiorussointroito/Documents/GitHub/Structural-Perturbation-Method")
 
-from SPM_fast import SPM
+#from SPM_fast import SPM
+from SPM_cython import SPM
 
 if __name__=="__main__":
     n_eigen = int(sys.argv[1])
