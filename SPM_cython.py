@@ -28,7 +28,7 @@ class SPM(object):
         self.A = A
         self.p = p
         self.N = self.A.shape[0]
-        self.delta_A = delta_A
+        #self.delta_A = delta_A
         self.n_removed_link = n_remove_link
         self.n_eigen = n_eigen
         self.target = np.sort(target)
@@ -45,7 +45,9 @@ class SPM(object):
             if isSingle:
                 np.random.seed(42)
 
-            self.n_removed_link = math.ceil(self.N * self.p)
+            #self.n_removed_link = math.ceil(self.N * self.p)    # TODO la percentuale dovrebbe essere sul numero di link,
+                                                                # non sul numero di nodi N
+            self.n_removed_link = math.ceil((self.A.nnz/2) * self.p)
 
             # Extract a fraction p of links from A to generate delta_A
             links = sps.find(sps.triu(self.A))[:2]  # Tuple (x, y) with x and y are lists of indices, we consider only
@@ -106,13 +108,8 @@ class SPM(object):
             self.pbar.set_description("Computing delta lambdas")
             delta_lambda_k = self.compute_delta_lambda(x_k, delta_A)
 
-
-        # TODO Provare numpy + Cython
         # Compute Perturbed Matrix
-        # perturbed_A = np.zeros((self.N, self.N), dtype=np.float16))
-
         # Perturbed_A : Non-squared matrix. Si restringe il calcolo ai soli elementi necessari
-        #perturbed_A = np.zeros((len(self.target), self.N), dtype=np.float32)
         x_k = x_k.astype(np.float32)
         lambda_k = lambda_k.astype(np.float32)
         delta_lambda_k = delta_lambda_k.astype(np.float32)

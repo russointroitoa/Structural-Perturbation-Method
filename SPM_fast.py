@@ -102,6 +102,7 @@ class SPM(object):
             delta_lambda_k = self.compute_delta_lambda(x_k, delta_A)
 
 
+        # Compute Perturbed Matrix
         # perturbed_A = np.zeros((self.N, self.N), dtype=np.float16))
 
         # Perturbed_A : Non-squared matrix. Si restringe il calcolo ai soli elementi necessari
@@ -111,10 +112,12 @@ class SPM(object):
         self.pbar.set_description("Computing Perturbed matrix")
         # perturbed_A = perturbed_A + ((lambda_k + delta_lambda_k)*(x_k.dot(x_k.T)))
 
-        for k in range(self.n_eigen):
+        tmp_outer = np.empty((len(self.target), self.N), dtype=np.float16)
+        for k in tqdm(range(self.n_eigen), desc="Compute Perturbed A" , leave=False):
             # perturbed_A += (lambda_k[k] + delta_lambda_k[k]) * np.dot(x_k[:, k][:, None], x_k[:, k][None, :])
-
-            np.add(perturbed_A, (lambda_k[k] + delta_lambda_k[k]) * np.outer(np.take(x_k[:, k], self.target), x_k[:, k]), out=perturbed_A)
+            x_k_target = np.take(x_k[:, k], self.target) * (lambda_k[k] + delta_lambda_k[k])
+            np.outer(x_k_target, x_k[:, k], out=tmp_outer)
+            np.add(perturbed_A,  tmp_outer, out=perturbed_A)
 
 
         # perturbed_A Cleaning: check the existing link in A_r [i.e. in E_r] and set those positions = -np.inf in
@@ -123,7 +126,7 @@ class SPM(object):
         #perturbed_A[np.where(A_r == 1)] = -np.inf
         self.pbar.set_description("Remove seen ")
 
-        # perturbed_A[sps.find(A_r)[:2]] = -np.inf  # TODO Mettere il filter seen sul main
+        # perturbed_A[sps.find(A_r)[:2]] = -np.inf  #  Filter seen sul main
 
         # Moreover we set to -np.inf also the element (i,i) in the diagonal since we do not have self-links
         # np.fill_diagonal(perturbed_A, -np.inf)
@@ -131,6 +134,9 @@ class SPM(object):
         # Per ogni riga i della matrice si deve mettere il valore di quell'utente a -np.inf perché non ci possono essere self-links
         for i, e in enumerate(self.target):
             perturbed_A[i, e] = -np.inf
+
+
+
 
         return perturbed_A
 

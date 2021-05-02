@@ -6,15 +6,17 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 import sys
+
 sys.path.append("/Users/alessiorussointroito/Documents/GitHub/Structural-Perturbation-Method")
 
-#from SPM_fast import SPM
-from SPM_cython import SPM
+# from SPM_fast import SPM
+from BiSPM import BiSPM
 
-if __name__=="__main__":
-    n_eigen = int(sys.argv[1])
+if __name__ == "__main__":
+    n_svs = int(sys.argv[1])
     k = int(sys.argv[2])
-    
+    p = float(sys.argv[3])
+
     df = pd.read_csv(
         "/Users/alessiorussointroito/Downloads/Telegram Desktop/recommender-system-2020-challenge-polimi/data_train.csv")
 
@@ -23,24 +25,10 @@ if __name__=="__main__":
 
     row_size = len(df.row.unique())
     col_size = len(le.classes_)
-    N_nodes = row_size + col_size
 
-    # Data Preprocessing
-    """
-    Siccome un tipico problema di recsys è rappresentabile con una rete bipartita, dove in un set ci sono gli user e 
-    dall' altro gli items, in questa rete dobbiamo distinguere tutti i nodi. Di conseguenza supponiamo che gli items  
-    rappresentino i nodi che vanno da 0 a 25974, gli user invece vanno da 24895 a 24896 + |users|
-    """
+    X_train, X_test, y_train, y_test = train_test_split(df.row, df.new_col, test_size=0.20, random_state=3)
 
-    df['row'] = df.row + col_size
-
-    # Train test split
-    X_train, X_test, y_train, y_test = train_test_split(df.row, df.new_col, test_size=0.20, random_state=42)
-
-    # Make the urm symmetric, creating 2 urm and summing them. The two matrices represent upper triangle and down triangle
-    adj_down = sps.csr_matrix((np.ones(X_train.shape[0]), (X_train, y_train)), shape=(N_nodes, N_nodes))
-    adj_up = sps.csr_matrix((np.ones(X_train.shape[0]), (y_train, X_train)), shape=(N_nodes, N_nodes))
-    adj = adj_up + adj_down
+    bip_adj = sps.csr_matrix((np.ones(X_train.shape[0]), (X_train, y_train)), shape=(row_size, col_size))
 
     test_indices = X_test.unique()
     test_indices = np.sort(test_indices)
@@ -48,9 +36,8 @@ if __name__=="__main__":
 
     targets = test.groupby(test.row)['target'].apply(lambda x: list(x))
 
-
-    spm = SPM(adj, target=test_indices , p=0.2, n_eigen=n_eigen)
-    rankings = spm.k_runs(k=k)
+    bspm = BiSPM(bip_adj, target=test_indices, n_sv=n_svs, p=p)
+    rankings = bspm.k_runs(k=k)
 
 
     # Evaluation
@@ -85,17 +72,14 @@ if __name__=="__main__":
 
     for i, user_id in enumerate(tqdm(test_indices)):
         relevant_items = targets[user_id]
-        #recommended_items = rankings[user_id].argsort()[::-1][:at]
+        # recommended_items = rankings[user_id].argsort()[::-1][:at]
         recommended_items = rankings[i]
 
         # Filter Seen:
         # 1. Remove items already seen by the user
-        seen_indices = sps.find(adj[user_id])[1]    # Con [1] Prendiamo solo le colonne d'interesse della matrice di adiacenza
-        mask = np.zeros(N_nodes, dtype=bool)
+        seen_indices = sps.find(bip_adj[user_id])[1]  # Con [1] Prendiamo solo le colonne d'interesse della matrice di adiacenza
+        mask = np.zeros(bip_adj.shape[1], dtype=bool)
         mask[seen_indices] = True
-
-        # 2. Remove the other users since we want to recommend only the items for each user
-        mask[col_size:] = True
 
         recommended_items[mask] = -np.inf
 
@@ -114,4 +98,5 @@ if __name__=="__main__":
     cumulative_recall /= num_eval
     cumulative_MAP /= num_eval
 
-    print(f"SPM n_eigen = {n_eigen} , k = {k}  \n Precision = {cumulative_precision} \n Recall = {cumulative_recall} \n MAP = {cumulative_MAP}")
+    print(
+        f"SPM n_eigen = {n_svs} , k = {k}  \n Precision = {cumulative_precision} \n Recall = {cumulative_recall} \n MAP = {cumulative_MAP}")
