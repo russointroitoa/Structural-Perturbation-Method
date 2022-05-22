@@ -6,7 +6,7 @@ import scipy.sparse as sps
 import sys
 sys.path.append("/Users/alessiorussointroito/Documents/GitHub/Structural-Perturbation-Method/")
 
-from cython_files.compute_perturbed_A import compute_perturbed_A   # TODO Runnarlo da terminale
+from cython_files.compute_perturbed_A import compute_perturbed_A
 
 
 class SPM(object):
@@ -45,8 +45,8 @@ class SPM(object):
             if isSingle:
                 np.random.seed(42)
 
-            #self.n_removed_link = math.ceil(self.N * self.p)    # TODO la percentuale dovrebbe essere sul numero di link,
-                                                                # non sul numero di nodi N
+            #self.n_removed_link = math.ceil(self.N * self.p)    # TODO: percentage on number of links, not nodes
+
             self.n_removed_link = math.ceil((self.A.nnz/2) * self.p)
 
             # Extract a fraction p of links from A to generate delta_A
@@ -109,7 +109,7 @@ class SPM(object):
             delta_lambda_k = self.compute_delta_lambda(x_k, delta_A)
 
         # Compute Perturbed Matrix
-        # Perturbed_A : Non-squared matrix. Si restringe il calcolo ai soli elementi necessari
+        # Perturbed_A : Non-squared matrix. Restrict computation to only relevant items
         x_k = x_k.astype(np.float32)
         lambda_k = lambda_k.astype(np.float32)
         delta_lambda_k = delta_lambda_k.astype(np.float32)
@@ -130,7 +130,7 @@ class SPM(object):
         # Moreover we set to -np.inf also the element (i,i) in the diagonal since we do not have self-links
         # np.fill_diagonal(perturbed_A, -np.inf)
 
-        # Per ogni riga i della matrice si deve mettere il valore di quell'utente a -np.inf perché non ci possono essere self-links
+        # Set the [i, i] of the matrix to -np.inf to avoid self-links
         for i, e in enumerate(self.target):
             perturbed_A[i, e] = -np.inf
 
